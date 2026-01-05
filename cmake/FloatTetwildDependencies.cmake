@@ -2,6 +2,12 @@
 # Prepare dependencies
 # ##############################################################################
 
+# Allow deprecated FetchContent_Populate calls (used by libigl for eigen)
+# This must be set before including FetchContent
+if(POLICY CMP0169)
+    cmake_policy(SET CMP0169 OLD)
+endif()
+
 # Use modern FetchContent for dependency management
 include(FetchContent)
 
@@ -55,11 +61,30 @@ if(NOT TARGET spdlog::spdlog)
         GIT_REPOSITORY https://github.com/gabime/spdlog
         GIT_TAG        v1.15.3
     )
-    
+
     # Configure spdlog to use external fmt
     set(SPDLOG_FMT_EXTERNAL ON CACHE BOOL "" FORCE)
-    
+
     FetchContent_MakeAvailable(spdlog)
+endif()
+
+# Eigen - fetch before libigl so libigl uses this version
+# Create Eigen target manually to avoid conflicts (uninstall target clashes with geogram)
+if(NOT TARGET Eigen3::Eigen)
+    FetchContent_Declare(
+        eigen
+        GIT_REPOSITORY https://gitlab.com/libeigen/eigen.git
+        GIT_TAG        3.4.0
+        GIT_SHALLOW    TRUE
+    )
+    # Only populate, don't add_subdirectory (to avoid uninstall target conflict)
+    FetchContent_GetProperties(eigen)
+    if(NOT eigen_POPULATED)
+        FetchContent_Populate(eigen)
+    endif()
+    # Create a header-only interface target for Eigen
+    add_library(Eigen3::Eigen INTERFACE IMPORTED GLOBAL)
+    target_include_directories(Eigen3::Eigen INTERFACE "${eigen_SOURCE_DIR}")
 endif()
 
 # libigl
@@ -67,7 +92,7 @@ if(NOT TARGET igl::core)
     FetchContent_Declare(
         libigl
         GIT_REPOSITORY https://github.com/libigl/libigl.git
-        GIT_TAG        v2.6.0   
+        GIT_TAG        v2.6.0
     )
     set(LIBIGL_BUILD_STATIC ON CACHE BOOL "" FORCE)
     set(LIBIGL_BUILD_SHARED OFF CACHE BOOL "" FORCE)
